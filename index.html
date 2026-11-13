@@ -1,0 +1,292 @@
+```html
+<!DOCTYPE html>
+<html lang="pt-BR" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rancho Trindade - Sistema de Gestão Agrícola & Fiscalização</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        agri: {
+                            50: '#f0fdf4',
+                            100: '#dcfce7',
+                            600: '#16a34a',
+                            700: '#15803d',
+                            800: '#166534',
+                            900: '#14532d',
+                        },
+                        gold: {
+                            500: '#eab308',
+                            600: '#ca8a04',
+                            700: '#a16207',
+                        },
+                        wood: {
+                            800: '#78350f',
+                            900: '#451a03',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Font Inter & FontAwesome -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Leaflet CSS & JS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        #map { height: 450px; width: 100%; border-radius: 1rem; z-index: 10; }
+        #gps-map { height: 350px; width: 100%; border-radius: 1rem; z-index: 10; }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-stone-50 via-green-50/30 to-amber-50/20 text-stone-800 min-h-full flex flex-col">
+
+    <!-- TOAST NOTIFICATION CONTAINER -->
+    <div id="toast-container" class="fixed top-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+    <!-- CUSTOM CONFIRMATION MODAL -->
+    <div id="custom-confirm-modal" class="fixed inset-0 z-50 hidden bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 border border-stone-200 text-center">
+            <div class="w-12 h-12 bg-amber-100 text-gold-700 rounded-full flex items-center justify-center mx-auto mb-3 text-xl">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+            </div>
+            <h3 id="confirm-title" class="text-lg font-bold text-stone-900 mb-2">Confirmação</h3>
+            <p id="confirm-message" class="text-sm text-stone-600 mb-6">Deseja realmente executar esta ação?</p>
+            <div class="flex gap-3 justify-center">
+                <button id="confirm-cancel-btn" onclick="closeConfirmModal(false)" class="px-4 py-2 bg-stone-100 hover:bg-stone-200 text-stone-700 rounded-xl text-sm font-medium transition">Cancelar</button>
+                <button id="confirm-ok-btn" onclick="closeConfirmModal(true)" class="px-4 py-2 bg-agri-700 hover:bg-agri-800 text-white rounded-xl text-sm font-semibold shadow transition">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- HEADER -->
+    <header class="bg-gradient-to-r from-wood-900 via-agri-900 to-wood-900 text-white shadow-xl border-b-4 border-gold-600">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col md:flex-row items-center justify-between gap-4">
+            <div class="flex items-center gap-4">
+                <div class="w-16 h-16 rounded-full bg-white/10 p-1 border-2 border-gold-500 shadow-inner flex items-center justify-center overflow-hidden">
+                    <img src="https://images.unsplash.com/photo-1500937386664-56d1dfef3854?auto=format&fit=crop&q=80&w=150" alt="Logo Rancho Trindade" class="w-full h-full object-cover rounded-full">
+                </div>
+                <div>
+                    <h1 class="text-2xl font-bold tracking-tight text-amber-100 flex items-center gap-2">
+                        <i class="fa-solid fa-seedling text-gold-500"></i> Rancho Trindade
+                    </h1>
+                    <p class="text-xs text-emerald-200">Gestão Agrícola Inteligente • Resp. Técnico: Rômulo Sperandio</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-3 flex-wrap justify-end">
+                <div class="bg-black/30 px-3 py-1.5 rounded-lg border border-gold-500/30 text-xs text-amber-200">
+                    <i class="fa-solid fa-map-location-dot mr-1 text-gold-500"></i> Itabela-BA | Mamão Havaí (13 ha)
+                </div>
+                <div id="current-user-badge" class="bg-agri-800 border border-agri-600 px-3 py-1.5 rounded-lg text-xs font-medium text-emerald-100 flex items-center gap-2">
+                    <i class="fa-solid fa-user-shield text-gold-400"></i>
+                    <span id="display-user-name">Leonardo Trindade</span> (<span id="display-user-role" class="text-gold-300">Proprietário</span>)
+                </div>
+            </div>
+        </div>
+        
+        <!-- NAVIGATION TABS -->
+        <div class="bg-black/20 border-t border-white/10 overflow-x-auto">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex gap-2 py-2 whitespace-nowrap">
+                <button onclick="switchTab('dashboard')" id="tab-dashboard" class="tab-btn px-3.5 py-2 rounded-lg font-medium text-sm transition flex items-center gap-2 bg-agri-700 text-white shadow">
+                    <i class="fa-solid fa-chart-pie"></i> Visão Geral
+                </button>
+                <button onclick="switchTab('map')" id="tab-map" class="tab-btn px-3.5 py-2 rounded-lg font-medium text-sm transition flex items-center gap-2 text-emerald-100 hover:bg-white/10">
+                    <i class="fa-solid fa-map"></i> Mapa & Talhões
+                </button>
+                <button onclick="switchTab('gps')" id="tab-gps" class="tab-btn px-3.5 py-2 rounded-lg font-medium text-sm transition flex items-center gap-2 text-emerald-100 hover:bg-white/10">
+                    <i class="fa-solid fa-location-crosshairs"></i> Medição GPS
+                </button>
+                <button onclick="switchTab('scheduling')" id="tab-scheduling" class="tab-btn px-3.5 py-2 rounded-lg font-medium text-sm transition flex items-center gap-2 text-emerald-100 hover:bg-white/10">
+                    <i class="fa-solid fa-calendar-days"></i> Agendamento & Ordens
+                </button>
+                <button onclick="switchTab('inventory')" id="tab-inventory" class="tab-btn px-3.5 py-2 rounded-lg font-medium text-sm transition flex items-center gap-2 text-emerald-100 hover:bg-white/10">
+                    <i class="fa-solid fa-boxes-stacked"></i> Estoque
+                </button>
+                <button onclick="switchTab('protocol')" id="tab-protocol" class="tab-btn px-3.5 py-2 rounded-lg font-medium text-sm transition flex items-center gap-2 text-emerald-100 hover:bg-white/10">
+                    <i class="fa-solid fa-clipboard-list"></i> Protocolos
+                </button>
+                <button onclick="switchTab('users')" id="tab-users" class="tab-btn px-3.5 py-2 rounded-lg font-medium text-sm transition flex items-center gap-2 text-emerald-100 hover:bg-white/10">
+                    <i class="fa-solid fa-users-gear"></i> Sub-Usuários
+                </button>
+                <button onclick="switchTab('history')" id="tab-history" class="tab-btn px-3.5 py-2 rounded-lg font-medium text-sm transition flex items-center gap-2 text-emerald-100 hover:bg-white/10">
+                    <i class="fa-solid fa-file-shield"></i> Fiscalização
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- MAIN CONTENT CONTAINER -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-grow w-full space-y-6">
+
+        <!-- TAB 1: DASHBOARD -->
+        <section id="section-dashboard" class="space-y-6">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-stone-200 flex items-center justify-between">
+                    <div>
+                        <p class="text-xs font-semibold uppercase text-stone-500">Área Total Mapeada</p>
+                        <h3 id="dash-total-area" class="text-2xl font-bold text-stone-900 mt-1">13.00 ha</h3>
+                        <span class="text-xs text-emerald-600 font-medium"><i class="fa-solid fa-arrow-up mr-1"></i>Mamão Havaí</span>
+                    </div>
+                    <div class="w-12 h-12 bg-emerald-100 text-agri-700 rounded-xl flex items-center justify-center text-xl">
+                        <i class="fa-solid fa-map-location-dot"></i>
+                    </div>
+                </div>
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-stone-200 flex items-center justify-between">
+                    <div>
+                        <p class="text-xs font-semibold uppercase text-stone-500">Ordens Pendentes</p>
+                        <h3 id="dash-pending-orders" class="text-2xl font-bold text-stone-900 mt-1">0</h3>
+                        <span class="text-xs text-amber-600 font-medium">Agendadas para aplicação</span>
+                    </div>
+                    <div class="w-12 h-12 bg-amber-100 text-gold-600 rounded-xl flex items-center justify-center text-xl">
+                        <i class="fa-solid fa-calendar-check"></i>
+                    </div>
+                </div>
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-stone-200 flex items-center justify-between">
+                    <div>
+                        <p class="text-xs font-semibold uppercase text-stone-500">Produtos no Estoque</p>
+                        <h3 id="dash-total-products" class="text-2xl font-bold text-stone-900 mt-1">0</h3>
+                        <span class="text-xs text-blue-600 font-medium">Itens cadastrados</span>
+                    </div>
+                    <div class="w-12 h-12 bg-blue-100 text-blue-700 rounded-xl flex items-center justify-center text-xl">
+                        <i class="fa-solid fa-boxes-stacked"></i>
+                    </div>
+                </div>
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-stone-200 flex items-center justify-between">
+                    <div>
+                        <p class="text-xs font-semibold uppercase text-stone-500">Sub-Usuários Ativos</p>
+                        <h3 id="dash-total-users" class="text-2xl font-bold text-stone-900 mt-1">3</h3>
+                        <span class="text-xs text-purple-600 font-medium">Com acesso RBAC</span>
+                    </div>
+                    <div class="w-12 h-12 bg-purple-100 text-purple-700 rounded-xl flex items-center justify-center text-xl">
+                        <i class="fa-solid fa-users"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Actions & Recent Activity Summary -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div class="lg:col-span-2 bg-white p-6 rounded-2xl shadow-sm border border-stone-200">
+                    <h3 class="text-lg font-bold text-stone-900 mb-4 flex items-center gap-2">
+                        <i class="fa-solid fa-bolt text-gold-600"></i> Ações Rápidas & Atividades
+                    </h3>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+                        <button onclick="switchTab('scheduling')" class="p-4 rounded-xl border border-stone-200 bg-stone-50 hover:bg-agri-50 hover:border-agri-300 transition text-left group">
+                            <div class="w-8 h-8 rounded-lg bg-agri-100 text-agri-700 flex items-center justify-center mb-2 group-hover:bg-agri-700 group-hover:text-white transition">
+                                <i class="fa-solid fa-calendar-plus"></i>
+                            </div>
+                            <div class="font-bold text-stone-800 text-sm">Nova Pulverização</div>
+                            <div class="text-xs text-stone-500">Agendar protocolo ou calda</div>
+                        </button>
+                        <button onclick="switchTab('gps')" class="p-4 rounded-xl border border-stone-200 bg-stone-50 hover:bg-emerald-50 hover:border-emerald-300 transition text-left group">
+                            <div class="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center mb-2 group-hover:bg-emerald-700 group-hover:text-white transition">
+                                <i class="fa-solid fa-location-crosshairs"></i>
+                            </div>
+                            <div class="font-bold text-stone-800 text-sm">Medição GPS</div>
+                            <div class="text-xs text-stone-500">Iniciar rastreio de talhão</div>
+                        </button>
+                        <button onclick="switchTab('inventory')" class="p-4 rounded-xl border border-stone-200 bg-stone-50 hover:bg-amber-50 hover:border-amber-300 transition text-left group">
+                            <div class="w-8 h-8 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center mb-2 group-hover:bg-amber-600 group-hover:text-white transition">
+                                <i class="fa-solid fa-box-open"></i>
+                            </div>
+                            <div class="font-bold text-stone-800 text-sm">Adicionar Insumo</div>
+                            <div class="text-xs text-stone-500">Entrada no estoque</div>
+                        </button>
+                    </div>
+
+                    <h4 class="font-bold text-stone-800 text-sm mb-3">Últimas Atividades no Sistema</h4>
+                    <div id="dash-recent-activities" class="space-y-2.5 text-xs">
+                        <!-- Populated dynamically -->
+                    </div>
+                </div>
+
+                <div class="bg-gradient-to-br from-wood-900 to-agri-900 text-white p-6 rounded-2xl shadow-sm flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center justify-between mb-4">
+                            <span class="bg-gold-600 text-wood-900 text-[10px] font-bold px-2 py-0.5 rounded uppercase">Responsável Técnico</span>
+                            <i class="fa-solid fa-certificate text-gold-400 text-xl"></i>
+                        </div>
+                        <h3 class="text-xl font-bold text-amber-100 mb-1">Eng. Agrônomo Rômulo Sperandio</h3>
+                        <p class="text-xs text-emerald-200 mb-4">CREA ES/BA: 14752685728</p>
+                        <div class="bg-white/10 p-3 rounded-xl border border-white/10 text-xs space-y-2">
+                            <div><strong class="text-gold-400">Propriedade:</strong> Rancho Trindade</div>
+                            <div><strong class="text-gold-400">Localidade:</strong> Itabela - BA</div>
+                            <div><strong class="text-gold-400">Cultura Principal:</strong> Mamão Havaí (13 ha)</div>
+                        </div>
+                    </div>
+                    <div class="mt-6 pt-4 border-t border-white/10 text-[11px] text-emerald-200/80 flex items-center justify-between">
+                        <span>Status: 100% Conforme</span>
+                        <i class="fa-solid fa-shield-halved text-gold-400"></i>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 2: MAP & FIELDS -->
+        <section id="section-map" class="hidden space-y-6">
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-stone-200">
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
+                    <div>
+                        <h2 class="text-xl font-bold text-stone-900 flex items-center gap-2">
+                            <i class="fa-solid fa-map text-agri-700"></i> Mapa Satélite & Delimitação de Talhões
+                        </h2>
+                        <p class="text-xs text-stone-500">Visualização via Esri World Imagery. Clique no mapa para adicionar pontos e delimitar um novo talhão agrícola.</p>
+                    </div>
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <button onclick="startDrawingField()" id="draw-btn" class="bg-gold-600 hover:bg-gold-700 text-wood-900 font-semibold px-4 py-2 rounded-lg shadow text-xs transition flex items-center gap-2">
+                            <i class="fa-solid fa-draw-polygon"></i> Desenhar Novo Talhão
+                        </button>
+                        <button onclick="clearCurrentDrawing()" id="clear-draw-btn" class="hidden bg-stone-200 hover:bg-stone-300 text-stone-700 px-3 py-2 rounded-lg text-xs font-medium">
+                            Limpar Pontos
+                        </button>
+                        <button onclick="saveDrawnField()" id="save-draw-btn" class="hidden bg-agri-700 hover:bg-agri-800 text-white px-4 py-2 rounded-lg font-semibold text-xs shadow">
+                            Salvar Talhão
+                        </button>
+                    </div>
+                </div>
+
+                <div id="map"></div>
+
+                <div class="mt-6">
+                    <h3 class="font-bold text-stone-800 text-sm mb-3">Talhões Cadastrados</h3>
+                    <div id="fields-list-container" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <!-- Dynamically populated -->
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 3: GPS FIELD MEASUREMENT -->
+        <section id="section-gps" class="hidden space-y-6">
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-stone-200">
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
+                    <div>
+                        <h2 class="text-xl font-bold text-stone-900 flex items-center gap-2">
+                            <i class="fa-solid fa-location-crosshairs text-agri-700"></i> Medição de Terreno por GPS (Operador)
+                        </h2>
+                        <p class="text-xs text-stone-500">Rastreie o percurso no campo em tempo real (com suporte a simulação caso o GPS esteja indisponível).</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button onclick="toggleGpsMode()" id="gps-mode-toggle" class="bg-stone-100 hover:bg-stone-200 text-stone-700 px-3 py-1.5 rounded-lg text-xs font-medium border border-stone-300">
+                            Modo: <span id="gps-mode-label">Geolocalização Real</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- GPS Stats Bar -->
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                    <div class="bg-stone-50 p-3.5 rounded-xl border border-stone-200 text-center">
+                        <span class="text-[11px] font-semibold uppercase text-stone-500">Tempo Decorrido</span>
+                        <div id="gps-timer" class="text-xl font-bold text-stone-900 font-mono mt-1">00:00:00</div>
+                    </div>
+                    <div class="bg-stone-50 p-3.5 rounded-xl border border-stone-200 text-center">
+                        <span class="text-[11px] font-semibold uppercase text-stone-500">Distância Percorrida</span>
+                        <div id="gps-distance" class="text-xl font-bold text-agri-700 mt-1">0.00 <small class="text-xs">km</small></div>
+                    </div>
+                    <div class="bg-stone-50 p-3.5 ro
